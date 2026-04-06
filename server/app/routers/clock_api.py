@@ -54,7 +54,7 @@ def get_clock(db: Session = Depends(get_db)):
 
     # ── Schedule check ───────────────────────────────────────────────
     if not system_active:
-        return _inactive(config_version)
+        return _inactive(config_version, local)
 
     is_weekend = local.weekday() >= 5
     start = int(_get(db, "weekend_start" if is_weekend else "weekday_start",
@@ -64,7 +64,7 @@ def get_clock(db: Session = Depends(get_db)):
 
     holiday = db.query(Holiday).filter(Holiday.date == local.date()).first()
     if holiday or not (start <= local.hour < end):
-        return _inactive(config_version)
+        return _inactive(config_version, local)
 
     return {
         "active": True,
@@ -102,6 +102,6 @@ def _ringing(cv: int):
             "mode": "alarm_ringing", "config_version": cv}
 
 
-def _inactive(cv: int):
-    return {"active": False, "hour": None, "minute": None,
+def _inactive(cv: int, local: datetime):
+    return {"active": False, "hour": local.hour, "minute": local.minute,
             "mode": "clock", "config_version": cv}

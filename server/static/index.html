@@ -81,7 +81,8 @@
         <div class="bg-slate-900 rounded-2xl border border-slate-800 p-8 flex flex-col items-center gap-7">
           <p class="text-[11px] font-semibold uppercase tracking-widest text-slate-600">Orologio Fisico</p>
 
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-4 transition-opacity"
+               :class="clockStatus?.active ? 'opacity-100' : 'opacity-40'">
             <div x-html="svg7seg(dashDigit(0), 72)"></div>
             <div x-html="svg7seg(dashDigit(1), 72)"></div>
             <div class="flex flex-col gap-3.5 pb-2">
@@ -843,7 +844,6 @@
       },
 
       dashDigit(pos) {
-        if (!this.clockStatus?.active) return 8;
         const h = this.clockStatus?.hour   ?? 0;
         const m = this.clockStatus?.minute ?? 0;
         return [Math.floor(h / 10), h % 10, Math.floor(m / 10), m % 10][pos];
