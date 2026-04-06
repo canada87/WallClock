@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WallClock Controller</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .seg-rect { transition: fill 0.15s; cursor: pointer; }
+    input[type=range] { accent-color: #3b82f6; }
+    input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased"
+      x-data="app()" x-init="init()" x-cloak>
+
+  <!-- Toast ─────────────────────────────────────────────────────── -->
+  <div x-show="toast" x-transition.opacity x-transition.duration.300ms
+       class="fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium pointer-events-none"
+       :class="toast?.type==='error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'">
+    <svg x-show="toast?.type!=='error'" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+    </svg>
+    <svg x-show="toast?.type==='error'" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+    </svg>
+    <span x-text="toast?.msg"></span>
+  </div>
+
+  <!-- Header ─────────────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-5xl mx-auto px-5 flex items-center justify-between h-14">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/40">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path stroke-linecap="round" d="M12 6v6l4 2"/>
+          </svg>
+        </div>
+        <span class="font-semibold text-sm tracking-tight">WallClock Controller</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full"
+             :class="{
+               'bg-emerald-400 shadow-emerald-400/50 shadow-sm animate-pulse': clockStatus?.active && clockStatus?.mode==='clock',
+               'bg-yellow-400 shadow-yellow-400/50 shadow-sm animate-pulse':  clockStatus?.mode==='timer',
+               'bg-red-400 shadow-red-400/50 shadow-sm animate-pulse':        clockStatus?.mode==='alarm_ringing',
+               'bg-slate-600': !clockStatus?.active,
+             }"></div>
+        <span class="text-xs text-slate-400" x-text="headerStatus()"></span>
+      </div>
+    </div>
+    <!-- Nav ──────────────────────────────────── -->
+    <div class="max-w-5xl mx-auto px-5">
+      <nav class="flex overflow-x-auto scrollbar-hide gap-0.5">
+        <template x-for="t in TABS" :key="t.id">
+          <button @click="tab=t.id"
+                  class="shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                  :class="tab===t.id
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'"
+                  x-text="t.label">
+          </button>
+        </template>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-5 py-8 space-y-6">
+
+    <!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+    <template x-if="tab==='dashboard'">
+      <div class="space-y-5">
+
+        <!-- Big clock display -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-8 flex flex-col items-center gap-7">
+          <p class="text-[11px] font-semibold uppercase tracking-widest text-slate-600">Orologio Fisico</p>
+
+          <div class="flex items-center gap-4">
+            <div x-html="svg7seg(dashDigit(0), 72)"></div>
+            <div x-html="svg7seg(dashDigit(1), 72)"></div>
+            <div class="flex flex-col gap-3.5 pb-2">
+              <div class="w-2.5 h-2.5 rounded-full" :class="clockStatus?.active ? 'bg-blue-400' : 'bg-slate-700'"></div>
+              <div class="w-2.5 h-2.5 rounded-full" :class="clockStatus?.active ? 'bg-blue-400' : 'bg-slate-700'"></div>
+            </div>
+            <div x-html="svg7seg(dashDigit(2), 72)"></div>
+            <div x-html="svg7seg(dashDigit(3), 72)"></div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <span class="px-3 py-1 rounded-full text-[11px] font-semibold border tracking-wide"
+                  :class="{
+                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': clockStatus?.active && clockStatus?.mode==='clock',
+                    'bg-yellow-500/10  text-yellow-400  border-yellow-500/20':  clockStatus?.mode==='timer',
+                    'bg-red-500/10     text-red-400     border-red-500/20':     clockStatus?.mode==='alarm_ringing',
+                    'bg-slate-800      text-slate-500   border-slate-700':      !clockStatus?.active,
+                  }" x-text="modeLabel()">
+            </span>
+            <button @click="loadClockStatus()"
+                    class="text-slate-600 hover:text-slate-300 transition-colors" title="Aggiorna">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p class="text-[11px] text-slate-600 mb-1 uppercase tracking-wide">Feriali</p>
+            <p class="font-semibold text-sm" x-text="`${pad(settings.weekday_start)}:00 – ${pad(settings.weekday_end)}:00`"></p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p class="text-[11px] text-slate-600 mb-1 uppercase tracking-wide">Weekend</p>
+            <p class="font-semibold text-sm" x-text="`${pad(settings.weekend_start)}:00 – ${pad(settings.weekend_end)}:00`"></p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p class="text-[11px] text-slate-600 mb-1 uppercase tracking-wide">Fuso Orario</p>
+            <p class="font-semibold text-sm" x-text="'UTC' + (settings.timezone_offset + settings.daylight_saving >= 0 ? '+' : '') + (settings.timezone_offset + settings.daylight_saving)"></p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p class="text-[11px] text-slate-600 mb-1 uppercase tracking-wide">Stato</p>
+            <p class="font-semibold text-sm"
+               :class="settings.active ? 'text-emerald-400' : 'text-red-400'"
+               x-text="settings.active ? 'Attivo' : 'Disattivo'"></p>
+          </div>
+        </div>
+
+      </div>
+    </template>
+
+    <!-- ═══════════════════ SCHEDULE ═══════════════════ -->
+    <template x-if="tab==='schedule'">
+      <div class="space-y-5">
+
+        <!-- Global toggle -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p class="font-medium text-sm">Orologio Abilitato</p>
+            <p class="text-xs text-slate-500 mt-0.5">Disabilita per bloccare tutti gli aggiornamenti</p>
+          </div>
+          <button @click="settings.active = !settings.active; saveSettings()"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none"
+                  :class="settings.active ? 'bg-blue-600' : 'bg-slate-700'">
+            <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                  :class="settings.active ? 'translate-x-6' : 'translate-x-1'"></span>
+          </button>
+        </div>
+
+        <!-- Active hours -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+          <h2 class="font-semibold text-sm">Orari di Attività</h2>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Weekdays -->
+            <div class="space-y-3">
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Feriali — Lun/Ven</p>
+              <div class="flex items-end gap-3">
+                <div class="flex-1">
+                  <label class="text-[11px] text-slate-500 block mb-1.5">Inizio</label>
+                  <select x-model.number="settings.weekday_start"
+                          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
+                  </select>
+                </div>
+                <span class="text-slate-600 mb-2.5">–</span>
+                <div class="flex-1">
+                  <label class="text-[11px] text-slate-500 block mb-1.5">Fine</label>
+                  <select x-model.number="settings.weekday_end"
+                          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <!-- Weekend -->
+            <div class="space-y-3">
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Weekend — Sab/Dom</p>
+              <div class="flex items-end gap-3">
+                <div class="flex-1">
+                  <label class="text-[11px] text-slate-500 block mb-1.5">Inizio</label>
+                  <select x-model.number="settings.weekend_start"
+                          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
+                  </select>
+                </div>
+                <span class="text-slate-600 mb-2.5">–</span>
+                <div class="flex-1">
+                  <label class="text-[11px] text-slate-500 block mb-1.5">Fine</label>
+                  <select x-model.number="settings.weekend_end"
+                          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button @click="saveSettings()"
+                  class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors">
+            Salva Orari
+          </button>
+        </div>
+
+        <!-- Holidays -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <div>
+            <h2 class="font-semibold text-sm">Giorni di Esclusione</h2>
+            <p class="text-xs text-slate-500 mt-0.5">L'orologio non si aggiorna in questi giorni (festività, ecc.)</p>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-2.5">
+            <input type="date" x-model="newHoliday.date"
+                   class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 flex-1">
+            <input type="text" x-model="newHoliday.description" placeholder="Descrizione (opzionale)"
+                   class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 flex-1">
+            <button @click="addHoliday()"
+                    class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
+              + Aggiungi
+            </button>
+          </div>
+
+          <div class="divide-y divide-slate-800" x-show="holidays.length > 0">
+            <template x-for="h in holidays" :key="h.id">
+              <div class="flex items-center justify-between py-3 first:pt-0">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium" x-text="fmtDate(h.date)"></p>
+                    <p class="text-xs text-slate-500" x-text="h.description || '—'"></p>
+                  </div>
+                </div>
+                <button @click="deleteHoliday(h.id)"
+                        class="text-slate-600 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-400/10">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                </button>
+              </div>
+            </template>
+          </div>
+          <p x-show="holidays.length === 0" class="text-center text-slate-600 text-sm py-4">Nessun giorno configurato</p>
+        </div>
+
+      </div>
+    </template>
+
+    <!-- ═══════════════════ CALIBRATION ═══════════════════ -->
+    <template x-if="tab==='calibration'">
+      <div class="space-y-5">
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+          <div class="flex flex-col lg:flex-row gap-8">
+
+            <!-- Left: digit picker + preview selector -->
+            <div class="flex lg:flex-col gap-2 lg:w-40 shrink-0 flex-wrap">
+              <p class="text-[11px] text-slate-600 uppercase tracking-wide w-full lg:mb-1">Cifra</p>
+              <template x-for="(lbl, di) in DIGIT_LABELS" :key="di">
+                <button @click="selDigit=di; selSeg=null"
+                        class="px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left whitespace-nowrap"
+                        :class="selDigit===di ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'"
+                        x-text="lbl">
+                </button>
+              </template>
+
+              <div class="w-full mt-2 lg:mt-auto">
+                <p class="text-[11px] text-slate-600 uppercase tracking-wide mb-1.5">Anteprima</p>
+                <select x-model.number="previewDigit"
+                        class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  <template x-for="d in 10" :key="d"><option :value="d-1" x-text="d-1"></option></template>
+                </select>
+              </div>
+            </div>
+
+            <!-- Center: interactive 7-segment SVG -->
+            <div class="flex-1 flex flex-col items-center gap-3">
+              <svg viewBox="0 0 120 200" width="140" height="234" class="drop-shadow-lg">
+                <!-- a: top -->
+                <rect x="18" y="2"   width="84" height="16" rx="3" class="seg-rect"
+                      :fill="segCol(0)" @click="selSeg=0"/>
+                <!-- b: top-right -->
+                <rect x="102" y="18" width="16" height="72" rx="3" class="seg-rect"
+                      :fill="segCol(1)" @click="selSeg=1"/>
+                <!-- c: bot-right -->
+                <rect x="102" y="110" width="16" height="72" rx="3" class="seg-rect"
+                      :fill="segCol(2)" @click="selSeg=2"/>
+                <!-- d: bottom -->
+                <rect x="18" y="182" width="84" height="16" rx="3" class="seg-rect"
+                      :fill="segCol(3)" @click="selSeg=3"/>
+                <!-- e: bot-left -->
+                <rect x="2" y="110"  width="16" height="72" rx="3" class="seg-rect"
+                      :fill="segCol(4)" @click="selSeg=4"/>
+                <!-- f: top-left -->
+                <rect x="2" y="18"   width="16" height="72" rx="3" class="seg-rect"
+                      :fill="segCol(5)" @click="selSeg=5"/>
+                <!-- g: middle -->
+                <rect x="18" y="92"  width="84" height="16" rx="3" class="seg-rect"
+                      :fill="segCol(6)" @click="selSeg=6"/>
+              </svg>
+              <p class="text-[11px] text-slate-600">Clicca un segmento per selezionarlo</p>
+            </div>
+
+            <!-- Right: servo editor panel -->
+            <div class="lg:w-60 shrink-0 transition-opacity" :class="selSeg!==null ? 'opacity-100' : 'opacity-0 pointer-events-none'">
+              <div class="bg-slate-800 rounded-xl p-4 space-y-4 border border-slate-700">
+                <div>
+                  <p class="font-semibold text-sm" x-text="(selSeg!==null ? SEG_LABELS[selSeg] : '—') + ' — ' + DIGIT_LABELS[selDigit]"></p>
+                  <p class="text-xs text-slate-500 mt-0.5"
+                     x-text="selSeg!==null ? `Board ${selDigit<2?'H':'M'}, Canale ${getChannel(selDigit, selSeg??0)}` : ''">
+                  </p>
+                </div>
+
+                <!-- ON slider -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between">
+                    <label class="text-xs text-slate-400">Posizione ON</label>
+                    <span class="text-xs font-mono text-blue-400"
+                          x-text="selSeg!==null ? getOnVal(selDigit, selSeg) : 0"></span>
+                  </div>
+                  <input type="range" min="0" max="600"
+                         :value="selSeg!==null ? getOnVal(selDigit, selSeg) : 0"
+                         @input="if(selSeg!==null) setOnVal(selDigit, selSeg, $event.target.value)"
+                         class="w-full">
+                  <input type="number" min="0" max="600"
+                         :value="selSeg!==null ? getOnVal(selDigit, selSeg) : 0"
+                         @input="if(selSeg!==null) setOnVal(selDigit, selSeg, $event.target.value)"
+                         class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-center focus:outline-none focus:border-blue-500">
+                </div>
+
+                <!-- OFF slider -->
+                <div class="space-y-1.5">
+                  <div class="flex justify-between">
+                    <label class="text-xs text-slate-400">Posizione OFF</label>
+                    <span class="text-xs font-mono text-slate-400"
+                          x-text="selSeg!==null ? getOffVal(selDigit, selSeg) : 0"></span>
+                  </div>
+                  <input type="range" min="0" max="600"
+                         :value="selSeg!==null ? getOffVal(selDigit, selSeg) : 0"
+                         @input="if(selSeg!==null) setOffVal(selDigit, selSeg, $event.target.value)"
+                         class="w-full">
+                  <input type="number" min="0" max="600"
+                         :value="selSeg!==null ? getOffVal(selDigit, selSeg) : 0"
+                         @input="if(selSeg!==null) setOffVal(selDigit, selSeg, $event.target.value)"
+                         class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-center focus:outline-none focus:border-blue-500">
+                </div>
+
+                <button @click="saveSingleServo()"
+                        class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-medium transition-colors">
+                  Salva Servo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Segment table -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+            <h2 class="font-semibold text-sm" x-text="'Segmenti — ' + DIGIT_LABELS[selDigit]"></h2>
+            <button @click="saveAllServos()"
+                    class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              Salva Tutti
+            </button>
+          </div>
+
+          <div class="divide-y divide-slate-800/60">
+            <template x-for="si in 7" :key="si">
+              <div @click="selSeg = si-1"
+                   class="flex items-center gap-4 px-5 py-3 cursor-pointer transition-all"
+                   :class="selSeg===si-1
+                     ? 'bg-blue-600/10 border-l-2 border-blue-500 pl-[18px]'
+                     : 'border-l-2 border-transparent hover:bg-slate-800/50'">
+
+                <div class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                     :style="`background-color: ${segCol(si-1)}22; border: 1px solid ${segCol(si-1)}44`">
+                  <div class="w-2 h-2 rounded-sm" :style="`background-color: ${segCol(si-1)}`"></div>
+                </div>
+                <span class="text-sm w-28 text-slate-300" x-text="SEG_LABELS[si-1]"></span>
+
+                <div class="flex-1 flex items-center gap-4">
+                  <div>
+                    <span class="text-[10px] text-slate-600 block mb-1">ON</span>
+                    <input type="number" min="0" max="600"
+                           :value="getOnVal(selDigit, si-1)"
+                           @click.stop
+                           @input="setOnVal(selDigit, si-1, $event.target.value)"
+                           class="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:border-blue-500">
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-slate-600 block mb-1">OFF</span>
+                    <input type="number" min="0" max="600"
+                           :value="getOffVal(selDigit, si-1)"
+                           @click.stop
+                           @input="setOffVal(selDigit, si-1, $event.target.value)"
+                           class="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:border-blue-500">
+                  </div>
+                </div>
+
+                <span class="text-[11px] text-slate-600 tabular-nums hidden sm:block"
+                      x-text="`Board ${selDigit<2?'H':'M'} · Ch ${getChannel(selDigit, si-1)}`">
+                </span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+      </div>
+    </template>
+
+    <!-- ═══════════════════ TIMER / ALARM ═══════════════════ -->
+    <template x-if="tab==='timer'">
+      <div class="space-y-5">
+
+        <!-- Ringing alert -->
+        <div x-show="timerAlarm.ringing"
+             class="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-2.5 h-2.5 rounded-full bg-red-400 animate-ping"></div>
+            <div>
+              <p class="font-semibold text-red-400 text-sm">
+                <span x-text="timerAlarm.mode==='timer' ? 'Timer scaduto!' : 'Sveglia!'"></span>
+                L'orologio sta suonando.
+              </p>
+              <p class="text-xs text-slate-500 mt-0.5">Il display mostra 88:88 → 00:00 in loop.</p>
+            </div>
+          </div>
+          <button @click="dismissAlarm()"
+                  class="shrink-0 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+            Spegni
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+          <!-- Timer card -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-yellow-500/15 flex items-center justify-center">
+                <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <h2 class="font-semibold text-sm">Countdown Timer</h2>
+              <span x-show="timerAlarm.mode==='timer' && !timerAlarm.ringing"
+                    class="ml-auto text-[11px] bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-2 py-0.5 rounded-full font-semibold">
+                ATTIVO
+              </span>
+            </div>
+
+            <!-- Countdown display -->
+            <div x-show="timerAlarm.mode==='timer' && !timerAlarm.ringing"
+                 class="text-center bg-slate-800 rounded-xl py-4">
+              <p class="text-3xl font-mono font-bold tracking-wider text-yellow-400" x-text="fmtRemaining()"></p>
+              <p class="text-[11px] text-slate-500 mt-1">rimanente</p>
+            </div>
+
+            <div class="space-y-3">
+              <label class="text-xs text-slate-500 uppercase tracking-wide">Durata in minuti</label>
+              <div class="flex gap-2.5">
+                <input type="number" x-model.number="timerMinutes" min="1" max="9999"
+                       class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                <button @click="startTimer()"
+                        class="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
+                  Avvia
+                </button>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <template x-for="m in [5, 10, 15, 30, 60, 90]" :key="m">
+                  <button @click="timerMinutes=m; startTimer()"
+                          class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                          x-text="m >= 60 ? (m/60)+'h' : m+'m'">
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alarm card -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+              </div>
+              <h2 class="font-semibold text-sm">Sveglia</h2>
+              <span x-show="timerAlarm.mode==='alarm' && !timerAlarm.ringing"
+                    class="ml-auto text-[11px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-semibold">
+                ATTIVA
+              </span>
+            </div>
+
+            <!-- Alarm display -->
+            <div x-show="timerAlarm.mode==='alarm' && !timerAlarm.ringing"
+                 class="text-center bg-slate-800 rounded-xl py-4">
+              <p class="text-3xl font-mono font-bold tracking-wider text-blue-400" x-text="timerAlarm.alarm_time || '--:--'"></p>
+              <p class="text-[11px] text-slate-500 mt-1">orario impostato</p>
+            </div>
+
+            <div class="space-y-3">
+              <label class="text-xs text-slate-500 uppercase tracking-wide">Orario sveglia</label>
+              <div class="flex gap-2.5">
+                <input type="time" x-model="alarmTime"
+                       class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                <button @click="setAlarm()"
+                        class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
+                  Imposta
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cancel button -->
+        <div x-show="timerAlarm.mode !== 'clock'" class="flex justify-center">
+          <button @click="cancelTimerAlarm()"
+                  class="flex items-center gap-1.5 text-slate-500 hover:text-red-400 text-sm transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            Annulla timer / sveglia
+          </button>
+        </div>
+
+      </div>
+    </template>
+
+    <!-- ═══════════════════ SETTINGS ═══════════════════ -->
+    <template x-if="tab==='settings'">
+      <div class="space-y-5">
+
+        <!-- Timezone -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+          <h2 class="font-semibold text-sm">Fuso Orario</h2>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <label class="text-xs text-slate-500 block mb-2 uppercase tracking-wide">Offset UTC</label>
+              <select x-model.number="settings.timezone_offset"
+                      class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                <template x-for="i in 27" :key="i">
+                  <option :value="i-13"
+                          x-text="(i-13 >= 0 ? 'UTC+' : 'UTC') + (i-13)"></option>
+                </template>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
+              <div>
+                <p class="text-sm font-medium">Ora Legale (DST)</p>
+                <p class="text-xs text-slate-500 mt-0.5">Aggiunge +1 ora automaticamente</p>
+              </div>
+              <button @click="settings.daylight_saving = settings.daylight_saving ? 0 : 1"
+                      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none"
+                      :class="settings.daylight_saving ? 'bg-blue-600' : 'bg-slate-600'">
+                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                      :class="settings.daylight_saving ? 'translate-x-6' : 'translate-x-1'"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="text-sm text-slate-500">
+            Offset totale attivo:
+            <span class="text-white font-semibold"
+                  x-text="'UTC' + (settings.timezone_offset + settings.daylight_saving >= 0 ? '+' : '') + (settings.timezone_offset + settings.daylight_saving)">
+            </span>
+          </div>
+        </div>
+
+        <!-- Animation params -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+          <h2 class="font-semibold text-sm">Parametri Animazione Servo</h2>
+
+          <div class="space-y-5">
+            <div>
+              <div class="flex justify-between items-baseline mb-2">
+                <label class="text-sm text-slate-400">Mid Offset — spazio libero per segmento centrale</label>
+                <span class="font-mono text-sm text-slate-300" x-text="settings.mid_offset"></span>
+              </div>
+              <input type="range" x-model.number="settings.mid_offset" min="0" max="500" class="w-full">
+              <p class="text-xs text-slate-600 mt-1">Quanto i segmenti adiacenti si spostano per far passare quello centrale.</p>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-baseline mb-2">
+                <label class="text-sm text-slate-400">Ritardo sequenza</label>
+                <span class="font-mono text-sm text-slate-300" x-text="settings.time_delay + ' ms'"></span>
+              </div>
+              <input type="range" x-model.number="settings.time_delay" min="0" max="500" class="w-full">
+              <p class="text-xs text-slate-600 mt-1">Pausa tra lo spostamento degli adiacenti e il movimento centrale.</p>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-baseline mb-2">
+                <label class="text-sm text-slate-400">Ritardo intermedio</label>
+                <span class="font-mono text-sm text-slate-300" x-text="settings.time_delay2 + ' ms'"></span>
+              </div>
+              <input type="range" x-model.number="settings.time_delay2" min="0" max="200" class="w-full">
+              <p class="text-xs text-slate-600 mt-1">Pausa tra un segmento e il successivo nel loop principale.</p>
+            </div>
+          </div>
+        </div>
+
+        <button @click="saveSettings()"
+                class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors">
+          Salva Impostazioni
+        </button>
+
+      </div>
+    </template>
+
+  </main>
+
+  <!-- ═══════════════════ JAVASCRIPT ═══════════════════ -->
+  <script>
+  function app() {
+    return {
+
+      // ── State ────────────────────────────────────────────────────
+      tab: 'dashboard',
+      TABS: [
+        { id: 'dashboard',   label: 'Dashboard'      },
+        { id: 'schedule',    label: 'Orario'          },
+        { id: 'calibration', label: 'Calibrazione'    },
+        { id: 'timer',       label: 'Timer / Sveglia' },
+        { id: 'settings',    label: 'Impostazioni'    },
+      ],
+
+      DIGIT_LABELS: ['Ore Decine', 'Ore Unità', 'Min Decine', 'Min Unità'],
+      SEG_LABELS:   ['Top', 'Top-Destra', 'Bot-Destra', 'Bottom', 'Bot-Sinistra', 'Top-Sinistra', 'Mezzo'],
+      DIGITS: [
+        [1,1,1,1,1,1,0], // 0
+        [0,1,1,0,0,0,0], // 1
+        [1,1,0,1,1,0,1], // 2
+        [1,1,1,1,0,0,1], // 3
+        [0,1,1,0,0,1,1], // 4
+        [1,0,1,1,0,1,1], // 5
+        [1,0,1,1,1,1,1], // 6
+        [1,1,1,0,0,0,0], // 7
+        [1,1,1,1,1,1,1], // 8
+        [1,1,1,1,0,1,1], // 9
+      ],
+
+      toast:       null,
+      clockStatus: null,
+      settings: {
+        timezone_offset: 1, daylight_saving: 1,
+        weekday_start: 8,  weekday_end: 21,
+        weekend_start: 11, weekend_end: 23,
+        mid_offset: 150,   time_delay: 100, time_delay2: 20,
+        active: true,
+      },
+      servoConfig: {
+        h_on:  Array(14).fill(150), h_off: Array(14).fill(150),
+        m_on:  Array(14).fill(150), m_off: Array(14).fill(150),
+      },
+      selDigit:    0,
+      selSeg:      null,
+      previewDigit: 8,
+      holidays:    [],
+      newHoliday:  { date: '', description: '' },
+      timerAlarm:  { mode: 'clock', ringing: false, alarm_time: null, remaining_seconds: null },
+      timerMinutes: 30,
+      alarmTime:   '07:00',
+
+      // ── Init ─────────────────────────────────────────────────────
+      async init() {
+        await Promise.all([
+          this.loadClockStatus(),
+          this.loadSettings(),
+          this.loadServoConfig(),
+          this.loadHolidays(),
+          this.loadTimerAlarm(),
+        ]);
+        setInterval(() => this.loadClockStatus(), 30000);
+        setInterval(() => this.loadTimerAlarm(), 5000);
+      },
+
+      // ── Data fetching ────────────────────────────────────────────
+      async loadClockStatus() {
+        try { this.clockStatus = await fetch('/api/clock').then(r => r.json()); }
+        catch(e) { console.error('clock fetch', e); }
+      },
+      async loadSettings() {
+        this.settings = await fetch('/api/admin/settings').then(r => r.json());
+      },
+      async loadServoConfig() {
+        this.servoConfig = await fetch('/api/admin/servo-config').then(r => r.json());
+      },
+      async loadHolidays() {
+        this.holidays = await fetch('/api/admin/holidays').then(r => r.json());
+      },
+      async loadTimerAlarm() {
+        this.timerAlarm = await fetch('/api/admin/timer-alarm').then(r => r.json());
+      },
+
+      // ── Settings ─────────────────────────────────────────────────
+      async saveSettings() {
+        const r = await fetch('/api/admin/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.settings),
+        });
+        r.ok ? this.toast_show('Impostazioni salvate') : this.toast_show('Errore', 'error');
+      },
+
+      // ── Servo helpers ────────────────────────────────────────────
+      getChannel(di, si) {
+        // di: 0=HourTens (ch7-13), 1=HourUnits (ch0-6), 2=MinTens (ch7-13), 3=MinUnits (ch0-6)
+        return (di % 2 === 0 ? 7 : 0) + si;
+      },
+      getOnVal(di, si) {
+        const ch  = this.getChannel(di, si);
+        return (di < 2 ? this.servoConfig.h_on : this.servoConfig.m_on)[ch];
+      },
+      getOffVal(di, si) {
+        const ch  = this.getChannel(di, si);
+        return (di < 2 ? this.servoConfig.h_off : this.servoConfig.m_off)[ch];
+      },
+      setOnVal(di, si, v) {
+        const ch  = this.getChannel(di, si);
+        const arr = di < 2 ? this.servoConfig.h_on : this.servoConfig.m_on;
+        arr[ch]   = parseInt(v) || 0;
+      },
+      setOffVal(di, si, v) {
+        const ch  = this.getChannel(di, si);
+        const arr = di < 2 ? this.servoConfig.h_off : this.servoConfig.m_off;
+        arr[ch]   = parseInt(v) || 0;
+      },
+
+      async saveSingleServo() {
+        if (this.selSeg === null) return;
+        const board = this.selDigit < 2 ? 'H' : 'M';
+        const ch    = this.getChannel(this.selDigit, this.selSeg);
+        const r     = await fetch(`/api/admin/servo/${board}/${ch}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pos_on:  this.getOnVal(this.selDigit, this.selSeg),
+            pos_off: this.getOffVal(this.selDigit, this.selSeg),
+          }),
+        });
+        r.ok ? this.toast_show('Servo salvato') : this.toast_show('Errore', 'error');
+      },
+
+      async saveAllServos() {
+        const r = await fetch('/api/admin/servo-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.servoConfig),
+        });
+        r.ok ? this.toast_show('Configurazione servo salvata') : this.toast_show('Errore', 'error');
+      },
+
+      // ── Holidays ─────────────────────────────────────────────────
+      async addHoliday() {
+        if (!this.newHoliday.date) return;
+        const r = await fetch('/api/admin/holidays', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.newHoliday),
+        });
+        if (r.ok) {
+          this.holidays.push(await r.json());
+          this.newHoliday = { date: '', description: '' };
+          this.toast_show('Giorno aggiunto');
+        } else {
+          this.toast_show('Data già presente', 'error');
+        }
+      },
+      async deleteHoliday(id) {
+        await fetch(`/api/admin/holidays/${id}`, { method: 'DELETE' });
+        this.holidays = this.holidays.filter(h => h.id !== id);
+        this.toast_show('Rimosso');
+      },
+
+      // ── Timer / Alarm ────────────────────────────────────────────
+      async startTimer() {
+        const r = await fetch('/api/admin/timer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ minutes: this.timerMinutes }),
+        });
+        if (r.ok) { await this.loadTimerAlarm(); this.toast_show(`Timer ${this.timerMinutes} min avviato`); }
+      },
+      async setAlarm() {
+        const r = await fetch('/api/admin/alarm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ time: this.alarmTime }),
+        });
+        if (r.ok) { await this.loadTimerAlarm(); this.toast_show(`Sveglia impostata alle ${this.alarmTime}`); }
+      },
+      async cancelTimerAlarm() {
+        await fetch('/api/admin/timer-alarm', { method: 'DELETE' });
+        await this.loadTimerAlarm();
+        this.toast_show('Annullato');
+      },
+      async dismissAlarm() {
+        await fetch('/api/admin/dismiss', { method: 'POST' });
+        await this.loadTimerAlarm();
+        await this.loadClockStatus();
+        this.toast_show('Sveglia spenta');
+      },
+
+      fmtRemaining() {
+        const s = this.timerAlarm.remaining_seconds ?? 0;
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const ss = s % 60;
+        return h > 0
+          ? `${h}:${this.pad(m)}:${this.pad(ss)}`
+          : `${this.pad(m)}:${this.pad(ss)}`;
+      },
+
+      // ── UI helpers ───────────────────────────────────────────────
+      pad(n) { return String(n).padStart(2, '0'); },
+
+      headerStatus() {
+        if (!this.clockStatus) return 'Connessione...';
+        if (this.clockStatus.mode === 'alarm_ringing') return 'SVEGLIA!';
+        if (this.clockStatus.mode === 'timer') return 'Timer attivo';
+        if (!this.clockStatus.active) return 'Inattivo';
+        return `${this.pad(this.clockStatus.hour)}:${this.pad(this.clockStatus.minute)}`;
+      },
+
+      modeLabel() {
+        if (!this.clockStatus) return '—';
+        if (this.clockStatus.mode === 'alarm_ringing') return 'ALLARME';
+        if (this.clockStatus.mode === 'timer') return 'TIMER';
+        return this.clockStatus.active ? 'OROLOGIO' : 'INATTIVO';
+      },
+
+      dashDigit(pos) {
+        if (!this.clockStatus?.active) return 8;
+        const h = this.clockStatus?.hour   ?? 0;
+        const m = this.clockStatus?.minute ?? 0;
+        return [Math.floor(h / 10), h % 10, Math.floor(m / 10), m % 10][pos];
+      },
+
+      fmtDate(s) {
+        return new Date(s + 'T12:00:00').toLocaleDateString('it-IT',
+          { day: '2-digit', month: 'long', year: 'numeric' });
+      },
+
+      toast_show(msg, type = 'success') {
+        this.toast = { msg, type };
+        setTimeout(() => this.toast = null, 3000);
+      },
+
+      // ── SVG helpers ──────────────────────────────────────────────
+
+      // Static SVG used in dashboard (no interactivity needed)
+      svg7seg(d, size = 60) {
+        d = Math.max(0, Math.min(9, d));
+        const seg = this.DIGITS[d];
+        const W = size, H = Math.round(size * 1.67);
+        const t = Math.round(size * 0.13);
+        const g = 2;
+        // vertical half height (space between bar bottom and middle bar)
+        const vh = Math.round((H / 2 - t - 2 * g));
+        const col = i => seg[i] ? '#60a5fa' : '#1e3a5f';
+        return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+          <rect x="${t+g}" y="${g}" width="${W-2*(t+g)}" height="${t}" rx="2" fill="${col(0)}"/>
+          <rect x="${W-t-g}" y="${t+g}" width="${t}" height="${vh}" rx="2" fill="${col(1)}"/>
+          <rect x="${W-t-g}" y="${H/2+g}" width="${t}" height="${vh}" rx="2" fill="${col(2)}"/>
+          <rect x="${t+g}" y="${H-t-g}" width="${W-2*(t+g)}" height="${t}" rx="2" fill="${col(3)}"/>
+          <rect x="${g}" y="${H/2+g}" width="${t}" height="${vh}" rx="2" fill="${col(4)}"/>
+          <rect x="${g}" y="${t+g}" width="${t}" height="${vh}" rx="2" fill="${col(5)}"/>
+          <rect x="${t+g}" y="${Math.round(H/2-t/2)}" width="${W-2*(t+g)}" height="${t}" rx="2" fill="${col(6)}"/>
+        </svg>`;
+      },
+
+      // Color for calibration SVG segments (supports selected highlight)
+      segCol(si) {
+        if (si === this.selSeg) return '#f59e0b';
+        if (this.DIGITS[this.previewDigit][si]) return '#60a5fa';
+        return '#1e3a5f';
+      },
+
+    };
+  }
+  </script>
+
+</body>
+</html>

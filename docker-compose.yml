@@ -1,0 +1,11 @@
+services:
+  wallclock:
+    build: ./server
+    ports:
+      - "8000:8000"
+    volumes:
+      - wallclock_data:/data
+    restart: unless-stopped
+
+volumes:
+  wallclock_data:
