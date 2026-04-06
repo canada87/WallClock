@@ -102,8 +102,28 @@
                     'bg-slate-800      text-slate-500   border-slate-700':      !clockStatus?.active,
                   }" x-text="modeLabel()">
             </span>
+
+            <!-- Forza aggiornamento -->
+            <button @click="sendForceUpdate()"
+                    :disabled="forceUpdatePending"
+                    :title="forceUpdatePending ? 'In attesa del prossimo poll ESP32 (max 30s)...' : 'Forza aggiornamento immediato (bypassa lo schedule)'"
+                    class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all"
+                    :class="forceUpdatePending
+                      ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400 cursor-wait'
+                      : 'border-slate-700 bg-slate-800 text-slate-400 hover:text-white hover:border-slate-500'">
+              <svg x-show="!forceUpdatePending" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              <svg x-show="forceUpdatePending" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              <span x-text="forceUpdatePending ? 'In attesa...' : 'Forza ora'"></span>
+            </button>
+
+            <!-- Ricarica status UI -->
             <button @click="loadClockStatus()"
-                    class="text-slate-600 hover:text-slate-300 transition-colors" title="Aggiorna">
+                    class="text-slate-600 hover:text-slate-300 transition-colors" title="Ricarica stato UI">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
               </svg>
@@ -674,6 +694,7 @@
       timerAlarm:  { mode: 'clock', ringing: false, alarm_time: null, remaining_seconds: null },
       timerMinutes: 30,
       alarmTime:   '07:00',
+      forceUpdatePending: false,
 
       // ── Init ─────────────────────────────────────────────────────
       async init() {
@@ -689,6 +710,27 @@
       },
 
       // ── Data fetching ────────────────────────────────────────────
+      async sendForceUpdate() {
+        const r = await fetch('/api/admin/force-update', { method: 'POST' });
+        if (!r.ok) { this.toast_show('Errore', 'error'); return; }
+        this.forceUpdatePending = true;
+        this.toast_show('Comando inviato — l\'ESP32 si aggiornerà al prossimo poll (max 30s)');
+        // Poll ogni 3s per max 35s aspettando che l'ESP consumi il flag
+        const start = Date.now();
+        const check = setInterval(async () => {
+          await this.loadClockStatus();
+          if (!this.clockStatus?.active || Date.now() - start > 35000) {
+            clearInterval(check);
+            this.forceUpdatePending = false;
+          }
+          // Se il clock è tornato active il flag è stato consumato
+          if (this.clockStatus?.active) {
+            clearInterval(check);
+            this.forceUpdatePending = false;
+          }
+        }, 3000);
+      },
+
       async loadClockStatus() {
         try { this.clockStatus = await fetch('/api/clock').then(r => r.json()); }
         catch(e) { console.error('clock fetch', e); }

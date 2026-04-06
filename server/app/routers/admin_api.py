@@ -235,6 +235,14 @@ def cancel_timer_alarm(db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.post("/force-update")
+def force_update(db: Session = Depends(get_db)):
+    """Setta un flag: al prossimo poll dell'ESP32 l'ora viene aggiornata
+    anche se fuori dall'orario configurato."""
+    _set(db, "force_update", "1")
+    return {"ok": True}
+
+
 @router.post("/dismiss")
 def dismiss_alarm(db: Session = Depends(get_db)):
     ta = db.query(TimerAlarm).filter(TimerAlarm.id == 1).first()

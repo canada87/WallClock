@@ -52,6 +52,20 @@ def get_clock(db: Session = Depends(get_db)):
     if ta and ta.ringing:
         return _ringing(config_version)
 
+    # ── Force-update flag (bypassa schedule per un solo poll) ───────
+    if _get(db, "force_update", "0") == "1":
+        row = db.query(Setting).filter(Setting.key == "force_update").first()
+        if row:
+            row.value = "0"
+        db.commit()
+        return {
+            "active": True,
+            "hour":   local.hour,
+            "minute": local.minute,
+            "mode":   "clock",
+            "config_version": config_version,
+        }
+
     # ── Schedule check ───────────────────────────────────────────────
     if not system_active:
         return _inactive(config_version, local)
