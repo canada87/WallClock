@@ -55,31 +55,43 @@ void setup() {
   digitalWrite(2, HIGH);   // LED on during boot
 
   Serial.begin(115200);
+  delay(500);
+  
+  Serial.println("\n\n========== WallClock BOOT ==========");
+  Serial.printf("SSID: %s | Server: %s\n", ssid, SERVER);
 
   // Init PCA9685 boards
+  Serial.println("[BOOT] Initializing PCA9685 boards (0x40, 0x41)...");
   pwmH.begin();
   pwmH.setPWMFreq(50);
   pwmH.setOscillatorFrequency(27000000);
   pwmM.begin();
   pwmM.setPWMFreq(50);
   pwmM.setOscillatorFrequency(27000000);
+  Serial.println("[BOOT] ✓ PCA9685 init done");
 
   // All segments off
+  Serial.println("[BOOT] Setting all segments to OFF...");
   for (int i = 0; i < 14; i++) {
     pwmH.setPWM(i, 0, segmentHOff[i]); delay(10);
     pwmM.setPWM(i, 0, segmentMOff[i]); delay(10);
   }
+  Serial.println("[BOOT] ✓ All segments OFF");
 
   // Connect WiFi and get initial data
+  Serial.println("[BOOT] Fetching WiFi connection...");
   ensureWiFi();
-  fetchServoConfig();
+  Serial.println("[BOOT] Fetching initial clock data (servo config included)...");
   fetchClockData();
+  Serial.println("[BOOT] ═══ BOOT COMPLETE ═══\n");
   lastPoll = millis();
 }
 
 // ═════════════════════════════════════════════════════════════════════
 void loop() {
-  if (millis() - lastPoll >= POLL_INTERVAL_MS) {
+  unsigned long elapsed = millis() - lastPoll;
+  if (elapsed >= POLL_INTERVAL_MS) {
+    Serial.printf("\n[POLL] Elapsed %lums — fetching new data...\n", elapsed);
     ensureWiFi();
     fetchClockData();
     lastPoll = millis();
@@ -89,32 +101,37 @@ void loop() {
 
 // ─── WiFi ─────────────────────────────────────────────────────────────
 void ensureWiFi() {
-  if (WiFi.status() == WL_CONNECTED) return;
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("[WiFi] ✓ Already connected (RSSI: %d dBm)\n", WiFi.RSSI());
+    return;
+  }
 
-  Serial.printf("Connecting to %s", ssid);
+  Serial.printf("[WiFi] Disconnected, reconnecting to '%s'", ssid);
   WiFi.begin(ssid, password);
   for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
     delay(500);
     Serial.print(".");
   }
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println(" OK");
+    Serial.printf(" ✓ OK (IP: %s, RSSI: %d dBm)\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
     digitalWrite(2, LOW);   // LED off = connected
   } else {
-    Serial.println(" FAILED");
+    Serial.println(" ✗ FAILED");
     digitalWrite(2, HIGH);  // LED on = error
   }
 }
 
 // ─── Fetch servo config from server ───────────────────────────────────
 void fetchServoConfig() {
+  Serial.print("[servo-config] Fetching from " SERVER "/api/servo-config...");
+  
   HTTPClient http;
   http.begin(String(SERVER) + "/api/servo-config");
   http.setTimeout(5000);
   int code = http.GET();
 
   if (code != 200) {
-    Serial.printf("[servo-config] HTTP %d\n", code);
+    Serial.printf(" ✗ HTTP %d\n", code);
     http.end();
     return;
   }
@@ -124,10 +141,11 @@ void fetchServoConfig() {
 
   JsonDocument doc;
   if (deserializeJson(doc, body)) {
-    Serial.println("[servo-config] JSON parse error");
+    Serial.println(" ✗ JSON parse error");
     return;
   }
 
+  // Parse configurazione
   for (int i = 0; i < 14; i++) {
     segmentHOn[i]  = doc["h_on"][i].as<int>();
     segmentHOff[i] = doc["h_off"][i].as<int>();
@@ -138,18 +156,22 @@ void fetchServoConfig() {
   time_delay  = doc["time_delay"].as<int>();
   time_delay2 = doc["time_delay2"].as<int>();
 
-  Serial.println("[servo-config] updated from server");
+  Serial.printf(" ✓ OK\n");
+  Serial.printf("[servo-config]   mid_offset=%d  time_delay=%d  time_delay2=%d\n",
+                midOffset, time_delay, time_delay2);
 }
 
 // ─── Fetch clock data and update display if needed ────────────────────
 void fetchClockData() {
+  Serial.print("[clock] Fetching from " SERVER "/api/clock...");
+  
   HTTPClient http;
   http.begin(String(SERVER) + "/api/clock");
   http.setTimeout(5000);
   int code = http.GET();
 
   if (code != 200) {
-    Serial.printf("[clock] HTTP %d\n", code);
+    Serial.printf(" ✗ HTTP %d\n", code);
     http.end();
     return;
   }
@@ -159,23 +181,31 @@ void fetchClockData() {
 
   JsonDocument doc;
   if (deserializeJson(doc, body)) {
-    Serial.println("[clock] JSON parse error");
+    Serial.println(" ✗ JSON parse error");
     return;
   }
+
+  Serial.println(" ✓ OK");
 
   // Refresh servo config if version changed
   int configVer = doc["config_version"].as<int>();
   if (configVer != lastConfigVersion) {
+    Serial.printf("[clock] Config version changed: %d → %d, fetching new servo config...\n", 
+                  lastConfigVersion, configVer);
     fetchServoConfig();
     lastConfigVersion = configVer;
   }
 
   bool active = doc["active"].as<bool>();
-  if (!active) return;   // outside schedule or disabled – leave display as-is
+  if (!active) {
+    Serial.println("[clock] ⚠️  INACTIVE — skipping display update");
+    return;
+  }
 
   String mode = doc["mode"].as<String>();
 
   if (mode == "alarm_ringing") {
+    Serial.println("[clock] 🔔 ALARM_RINGING mode — running 88:88 ↔ 00:00 animation");
     doAlarmAnimation();
     return;
   }
@@ -188,29 +218,40 @@ void fetchClockData() {
   int newMT = newMinute / 10;
   int newMU = newMinute % 10;
 
+  // Debug: mostra se l'ora è cambiata
   if (newHT != prevHourTens   || newHU != prevHourUnits ||
       newMT != prevMinuteTens || newMU != prevMinuteUnits) {
+
+    Serial.printf("[clock] Time changed: %02d:%02d → %02d:%02d (mode=%s)\n",
+                  prevHourTens*10 + prevHourUnits, prevMinuteTens*10 + prevMinuteUnits,
+                  newHour, newMinute, mode.c_str());
+    Serial.printf("[clock] Digit breakdown: HT=%d HU=%d MT=%d MU=%d\n",
+                  newHT, newHU, newMT, newMU);
 
     hourTens    = newHT;
     hourUnits   = newHU;
     minuteTens  = newMT;
     minuteUnits = newMU;
 
+    Serial.println("[clock] Calling updateDisplay()...");
     updateDisplay();
+    Serial.println("[clock] ✓ updateDisplay() complete");
 
     prevHourTens    = hourTens;
     prevHourUnits   = hourUnits;
     prevMinuteTens  = minuteTens;
     prevMinuteUnits = minuteUnits;
-
-    Serial.printf("[clock] display -> %02d:%02d (%s)\n",
-                  newHour, newMinute, mode.c_str());
+  } else {
+    Serial.printf("[clock] No change: %02d:%02d\n", newHour, newMinute);
   }
 }
 
 // ─── Alarm animation: 88:88 ↔ 00:00 loop ─────────────────────────────
 void doAlarmAnimation() {
+  Serial.println("[alarm] Starting 88:88 ↔ 00:00 animation (5 cycles)...");
+  
   for (int rep = 0; rep < 5; rep++) {
+    Serial.printf("[alarm] Cycle %d/5: 88:88\n", rep + 1);
     hourTens    = 8; hourUnits    = 8;
     minuteTens  = 8; minuteUnits  = 8;
     updateDisplay();
@@ -218,6 +259,7 @@ void doAlarmAnimation() {
     prevMinuteTens = 8; prevMinuteUnits = 8;
     delay(700);
 
+    Serial.printf("[alarm] Cycle %d/5: 00:00\n", rep + 1);
     hourTens    = 0; hourUnits    = 0;
     minuteTens  = 0; minuteUnits  = 0;
     updateDisplay();
@@ -225,6 +267,8 @@ void doAlarmAnimation() {
     prevMinuteTens = 0; prevMinuteUnits = 0;
     delay(700);
   }
+  
+  Serial.println("[alarm] ✓ Animation complete");
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -232,27 +276,34 @@ void doAlarmAnimation() {
 // ═════════════════════════════════════════════════════════════════════
 
 void updateDisplay() {
+  Serial.printf("[display] Updating segments for %d%d:%d%d\n",
+                hourTens, hourUnits, minuteTens, minuteUnits);
+  
   updateMid();
 
   for (int i = 0; i <= 5; i++) {
+    // Hour tens (channels 7-12)
     if (digits[hourTens][i] == 1)
       pwmH.setPWM(i + 7, 0, segmentHOn[i + 7]);
     else
       pwmH.setPWM(i + 7, 0, segmentHOff[i + 7]);
     delay(time_delay2);
 
+    // Hour units (channels 0-5)
     if (digits[hourUnits][i] == 1)
       pwmH.setPWM(i, 0, segmentHOn[i]);
     else
       pwmH.setPWM(i, 0, segmentHOff[i]);
     delay(time_delay2);
 
+    // Minute tens (channels 7-12)
     if (digits[minuteTens][i] == 1)
       pwmM.setPWM(i + 7, 0, segmentMOn[i + 7]);
     else
       pwmM.setPWM(i + 7, 0, segmentMOff[i + 7]);
     delay(time_delay2);
 
+    // Minute units (channels 0-5)
     if (digits[minuteUnits][i] == 1)
       pwmM.setPWM(i, 0, segmentMOn[i]);
     else
