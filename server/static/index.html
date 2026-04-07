@@ -185,7 +185,7 @@
               <div class="flex items-end gap-3">
                 <div class="flex-1">
                   <label class="text-[11px] text-slate-500 block mb-1.5">Inizio</label>
-                  <select x-model.number="settings.weekday_start"
+                  <select x-model="settings.weekday_start"
                           class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
                   </select>
@@ -193,7 +193,7 @@
                 <span class="text-slate-600 mb-2.5">–</span>
                 <div class="flex-1">
                   <label class="text-[11px] text-slate-500 block mb-1.5">Fine</label>
-                  <select x-model.number="settings.weekday_end"
+                  <select x-model="settings.weekday_end"
                           class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
                   </select>
@@ -206,7 +206,7 @@
               <div class="flex items-end gap-3">
                 <div class="flex-1">
                   <label class="text-[11px] text-slate-500 block mb-1.5">Inizio</label>
-                  <select x-model.number="settings.weekend_start"
+                  <select x-model="settings.weekend_start"
                           class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
                   </select>
@@ -214,7 +214,7 @@
                 <span class="text-slate-600 mb-2.5">–</span>
                 <div class="flex-1">
                   <label class="text-[11px] text-slate-500 block mb-1.5">Fine</label>
-                  <select x-model.number="settings.weekend_end"
+                  <select x-model="settings.weekend_end"
                           class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <template x-for="h in 24" :key="h"><option :value="h-1" x-text="pad(h-1)+':00'"></option></template>
                   </select>
@@ -297,7 +297,7 @@
 
               <div class="w-full mt-2 lg:mt-auto">
                 <p class="text-[11px] text-slate-600 uppercase tracking-wide mb-1.5">Anteprima</p>
-                <select x-model.number="previewDigit"
+                <select x-model="previewDigit"
                         class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                   <template x-for="d in 10" :key="d"><option :value="d-1" x-text="d-1"></option></template>
                 </select>
@@ -568,7 +568,7 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label class="text-xs text-slate-500 block mb-2 uppercase tracking-wide">Offset UTC</label>
-              <select x-model.number="settings.timezone_offset"
+              <select x-model="settings.timezone_offset"
                       class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                 <template x-for="i in 27" :key="i">
                   <option :value="i-13"
@@ -750,10 +750,18 @@
 
       // ── Settings ─────────────────────────────────────────────────
       async saveSettings() {
+        const payload = {
+          ...this.settings,
+          timezone_offset: Number(this.settings.timezone_offset),
+          weekday_start:   Number(this.settings.weekday_start),
+          weekday_end:     Number(this.settings.weekday_end),
+          weekend_start:   Number(this.settings.weekend_start),
+          weekend_end:     Number(this.settings.weekend_end),
+        };
         const r = await fetch('/api/admin/settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.settings),
+          body: JSON.stringify(payload),
         });
         r.ok ? this.toast_show('Impostazioni salvate') : this.toast_show('Errore', 'error');
       },
