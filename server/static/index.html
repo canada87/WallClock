@@ -719,12 +719,12 @@
         const start = Date.now();
         const check = setInterval(async () => {
           await this.loadClockStatus();
-          if (!this.clockStatus?.active || Date.now() - start > 35000) {
+          if (Date.now() - start > 35000) {
             clearInterval(check);
             this.forceUpdatePending = false;
           }
-          // Se il clock è tornato active il flag è stato consumato
-          if (this.clockStatus?.active) {
+          // Il flag è stato consumato dall'ESP32 quando force_update_pending diventa false
+          if (!this.clockStatus?.force_update_pending) {
             clearInterval(check);
             this.forceUpdatePending = false;
           }
@@ -732,7 +732,7 @@
       },
 
       async loadClockStatus() {
-        try { this.clockStatus = await fetch('/api/clock').then(r => r.json()); }
+        try { this.clockStatus = await fetch('/api/admin/clock-status').then(r => r.json()); }
         catch(e) { console.error('clock fetch', e); }
       },
       async loadSettings() {

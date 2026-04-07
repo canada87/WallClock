@@ -5,9 +5,9 @@
 #include <Adafruit_PWMServoDriver.h>
 
 // ── Configuration ────────────────────────────────────────────────────
-const char* ssid     = "";          // WiFi SSID
-const char* password = "";          // WiFi password
-const char* SERVER   = "http://192.168.1.100:8000";  // <-- IP del tuo server
+const char* ssid     = "Vodafon-C47560720";          // WiFi SSID
+const char* password = "YYAK4NYpPkmtpYY3";          // WiFi password
+const char* SERVER   = "http://192.168.1.185:8077";  // <-- IP del tuo server
 
 const unsigned long POLL_INTERVAL_MS = 30000;  // poll ogni 30 secondi
 
@@ -107,6 +107,9 @@ void ensureWiFi() {
   }
 
   Serial.printf("[WiFi] Disconnected, reconnecting to '%s'", ssid);
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_STA);
+  delay(100);
   WiFi.begin(ssid, password);
   for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
     delay(500);
@@ -123,7 +126,7 @@ void ensureWiFi() {
 
 // ─── Fetch servo config from server ───────────────────────────────────
 void fetchServoConfig() {
-  Serial.print("[servo-config] Fetching from " SERVER "/api/servo-config...");
+  Serial.print(String("[servo-config] Fetching from ") + SERVER + "/api/servo-config...");
   
   HTTPClient http;
   http.begin(String(SERVER) + "/api/servo-config");
@@ -163,7 +166,7 @@ void fetchServoConfig() {
 
 // ─── Fetch clock data and update display if needed ────────────────────
 void fetchClockData() {
-  Serial.print("[clock] Fetching from " SERVER "/api/clock...");
+  Serial.print(String("[clock] Fetching from ") + SERVER + "/api/clock...");
   
   HTTPClient http;
   http.begin(String(SERVER) + "/api/clock");

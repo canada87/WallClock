@@ -14,7 +14,7 @@ import json
 from datetime import datetime
 
 # Configurazione
-SERVER = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
+SERVER = sys.argv[1] if len(sys.argv) > 1 else "http://192.168.1.185:8077"
 TIMEOUT = 5
 
 # Mapping dei segmenti 7-segmenti
@@ -32,19 +32,24 @@ DIGITS_7SEG = [
     {0, 1, 2, 3, 5, 6},      # 9
 ]
 
+
 def print_header(text):
     print(f"\n{'='*60}")
     print(f"  {text}")
     print('='*60)
 
+
 def print_ok(text):
     print(f"  ✓ {text}")
+
 
 def print_error(text):
     print(f"  ✗ {text}")
 
+
 def print_info(text):
     print(f"  • {text}")
+
 
 def fetch_clock():
     """Fetch /api/clock — le stesse dati che l'ESP32 legge ogni 30s"""
@@ -110,6 +115,7 @@ def fetch_clock():
         print_error(f"Exception: {e}")
         return None
 
+
 def fetch_servo_config():
     """Fetch /api/servo-config — i parametri calibrazione servo"""
     print_header("GET /api/servo-config")
@@ -164,6 +170,7 @@ def fetch_servo_config():
         print_error(f"Exception: {e}")
         return None
 
+
 def main():
     print("\n" + "="*60)
     print("  WallClock API Test — Replica delle chiamate ESP32")
@@ -191,6 +198,7 @@ def main():
         print_error("Some requests failed — check server connectivity")
     
     print()
+
 
 if __name__ == "__main__":
     main()

@@ -235,6 +235,51 @@ def cancel_timer_alarm(db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.get("/clock-status")
+def get_clock_status(db: Session = Depends(get_db)):
+    """Stato corrente del clock per la UI — NON consuma il flag force_update."""
+    from datetime import timedelta
+    tz  = int(_get(db, "timezone_offset", "1"))
+    dst = int(_get(db, "daylight_saving",  "1"))
+    local = datetime.utcnow() + timedelta(hours=tz + dst)
+    config_version = int(_get(db, "config_version", "1"))
+    system_active  = _get(db, "active", "1") == "1"
+    force_pending  = _get(db, "force_update", "0") == "1"
+
+    ta = db.query(TimerAlarm).filter(TimerAlarm.id == 1).first()
+    if ta and ta.ringing:
+        return {"active": True, "hour": 88, "minute": 88,
+                "mode": "alarm_ringing", "config_version": config_version,
+                "force_update_pending": force_pending}
+    if ta and ta.mode == "timer" and ta.timer_end:
+        secs = (ta.timer_end - datetime.utcnow()).total_seconds()
+        if secs > 0:
+            h = int(secs // 3600); m = int((secs % 3600) // 60)
+            return {"active": True, "hour": min(h, 99), "minute": m,
+                    "mode": "timer", "config_version": config_version,
+                    "force_update_pending": force_pending}
+
+    if not system_active:
+        return {"active": False, "hour": local.hour, "minute": local.minute,
+                "mode": "clock", "config_version": config_version,
+                "force_update_pending": force_pending}
+
+    is_weekend = local.weekday() >= 5
+    start = int(_get(db, "weekend_start" if is_weekend else "weekday_start",
+                     "11" if is_weekend else "8"))
+    end   = int(_get(db, "weekend_end"   if is_weekend else "weekday_end",
+                     "23" if is_weekend else "21"))
+    holiday = db.query(Holiday).filter(Holiday.date == local.date()).first()
+    if holiday or not (start <= local.hour < end):
+        return {"active": False, "hour": local.hour, "minute": local.minute,
+                "mode": "clock", "config_version": config_version,
+                "force_update_pending": force_pending}
+
+    return {"active": True, "hour": local.hour, "minute": local.minute,
+            "mode": "clock", "config_version": config_version,
+            "force_update_pending": force_pending}
+
+
 @router.post("/force-update")
 def force_update(db: Session = Depends(get_db)):
     """Setta un flag: al prossimo poll dell'ESP32 l'ora viene aggiornata
