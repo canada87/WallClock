@@ -10,7 +10,7 @@ const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 const char* SERVER   = SERVER_URL;
 
-const unsigned long POLL_INTERVAL_MS = 30000;  // poll ogni 30 secondi
+const unsigned long POLL_INTERVAL_MS = 10000;  // poll ogni 10 secondi
 
 // ── Hardware ─────────────────────────────────────────────────────────
 Adafruit_PWMServoDriver pwmH = Adafruit_PWMServoDriver(0x40);
