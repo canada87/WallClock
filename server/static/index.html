@@ -316,6 +316,10 @@
                         class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                   <template x-for="d in 10" :key="d"><option :value="d-1" x-text="d-1"></option></template>
                 </select>
+                <button @click="sendPreviewToServos()"
+                        class="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                  Invia ai servo
+                </button>
               </div>
             </div>
 
@@ -985,6 +989,17 @@
         if (si === this.selSeg) return '#f59e0b';
         if (this.DIGITS[this.previewDigit][si]) return '#60a5fa';
         return '#1e3a5f';
+      },
+
+      async sendPreviewToServos() {
+        const d = parseInt(this.previewDigit);
+        const h = d * 11;
+        const m = d * 11;
+        await fetch('/api/admin/force-display', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({hour: h, minute: m})
+        });
       },
 
     };

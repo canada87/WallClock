@@ -291,6 +291,18 @@ def force_update(db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.post("/force-display")
+def force_display(payload: dict, db: Session = Depends(get_db)):
+    """Forza il display a mostrare una specifica ora al prossimo poll ESP32.
+    Body: {"hour": 0-99, "minute": 0-99}"""
+    hour   = int(payload.get("hour",   0))
+    minute = int(payload.get("minute", 0))
+    _set(db, "force_display_hour",   str(hour))
+    _set(db, "force_display_minute", str(minute))
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/dismiss")
 def dismiss_alarm(db: Session = Depends(get_db)):
     ta = db.query(TimerAlarm).filter(TimerAlarm.id == 1).first()

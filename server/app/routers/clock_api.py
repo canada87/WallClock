@@ -100,6 +100,22 @@ def get_clock(db: Session = Depends(get_db)):
             "fetch_interval":  fetch_interval,
         }
 
+    # ── Force-display: mostra un'ora specifica per un solo poll ─────
+    fdh = _get(db, "force_display_hour", "")
+    if fdh != "":
+        fdm = _get(db, "force_display_minute", "0")
+        _set(db, "force_display_hour",   "")
+        _set(db, "force_display_minute", "")
+        db.commit()
+        return {
+            "active": True,
+            "hour":   int(fdh),
+            "minute": int(fdm),
+            "mode":   "clock",
+            "config_version": config_version,
+            "fetch_interval": fetch_interval,
+        }
+
     # ── Schedule check ───────────────────────────────────────────────
     if not system_active:
         return _inactive(config_version, local, fetch_interval)
