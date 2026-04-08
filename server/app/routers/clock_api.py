@@ -28,20 +28,20 @@ def _local_dt(db: Session) -> datetime:
     return datetime.utcnow() + timedelta(hours=tz + dst)
 
 
-def _display_frozen(db: Session, fetch_interval: int) -> bool:
-    """True se l'intervallo non è ancora scaduto dall'ultimo aggiornamento display."""
-    last_str = _get(db, "last_display_update", "")
-    if not last_str:
-        return False
-    try:
-        elapsed = (datetime.utcnow() - datetime.fromisoformat(last_str)).total_seconds()
-        return elapsed < fetch_interval
-    except ValueError:
-        return False
+def _current_slot(hour: int, minute: int, interval_minutes: int) -> int:
+    """Slot allineato all'orologio: (ore*60+min) // intervallo."""
+    return (hour * 60 + minute) // max(1, interval_minutes)
 
 
-def _record_display_update(db: Session, hour: int, minute: int) -> None:
-    _set(db, "last_display_update", datetime.utcnow().isoformat())
+def _display_frozen(db: Session, hour: int, minute: int, fetch_interval: int) -> bool:
+    """True se siamo ancora nello stesso slot dell'ultimo aggiornamento."""
+    last_slot = _get(db, "last_sent_slot", "-1")
+    return _current_slot(hour, minute, fetch_interval) == int(last_slot)
+
+
+def _record_display_update(db: Session, hour: int, minute: int, fetch_interval: int) -> None:
+    slot = _current_slot(hour, minute, fetch_interval)
+    _set(db, "last_sent_slot",   str(slot))
     _set(db, "last_sent_hour",   str(hour))
     _set(db, "last_sent_minute", str(minute))
     db.commit()
@@ -90,7 +90,7 @@ def get_clock(db: Session = Depends(get_db)):
         row = db.query(Setting).filter(Setting.key == "force_update").first()
         if row:
             row.value = "0"
-        _record_display_update(db, local.hour, local.minute)
+        _record_display_update(db, local.hour, local.minute, fetch_interval)
         return {
             "active": True,
             "hour":   local.hour,
@@ -114,12 +114,12 @@ def get_clock(db: Session = Depends(get_db)):
     if holiday or not (start <= local.hour < end):
         return _inactive(config_version, local, fetch_interval)
 
-    # ── Freeze display se l'intervallo non è scaduto ────────────────────
-    if _display_frozen(db, fetch_interval):
+    # ── Freeze display finché non cambia slot ────────────────────────────
+    if _display_frozen(db, local.hour, local.minute, fetch_interval):
         h = int(_get(db, "last_sent_hour",   str(local.hour)))
         m = int(_get(db, "last_sent_minute", str(local.minute)))
     else:
-        _record_display_update(db, local.hour, local.minute)
+        _record_display_update(db, local.hour, local.minute, fetch_interval)
         h, m = local.hour, local.minute
 
     return {

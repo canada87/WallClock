@@ -655,14 +655,14 @@
             <label class="text-xs text-slate-500 block mb-2 uppercase tracking-wide">Intervallo poll ESP32</label>
             <select x-model.number="settings.fetch_interval"
                     class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-              <option :value="10">10 secondi</option>
-              <option :value="30">30 secondi</option>
-              <option :value="60">1 minuto</option>
-              <option :value="300">5 minuti</option>
-              <option :value="600">10 minuti</option>
-              <option :value="1800">30 minuti</option>
+              <option :value="1">1 minuto  — aggiornamento a ogni minuto (:00, :01, :02…)</option>
+              <option :value="5">5 minuti  — aggiornamento a :00, :05, :10, :15…</option>
+              <option :value="10">10 minuti — aggiornamento a :00, :10, :20, :30…</option>
+              <option :value="15">15 minuti — aggiornamento a :00, :15, :30, :45</option>
+              <option :value="30">30 minuti — aggiornamento a :00 e :30</option>
+              <option :value="60">60 minuti — aggiornamento solo a :00</option>
             </select>
-            <p class="text-xs text-slate-600 mt-2">Ogni quanto l'ESP32 chiede l'ora al server e aggiorna i servo.</p>
+            <p class="text-xs text-slate-600 mt-2">Gli aggiornamenti sono allineati all'orologio, indipendentemente da quando si salva l'impostazione.</p>
           </div>
         </div>
 
@@ -713,7 +713,7 @@
         weekday_start: 8,  weekday_end: 21,
         weekend_start: 11, weekend_end: 23,
         mid_offset: 150,   time_delay: 100, time_delay2: 20,
-        active: true,      fetch_interval: 30,
+        active: true,      fetch_interval: 1,
       },
       servoConfig: {
         h_on:  Array(14).fill(150), h_off: Array(14).fill(150),
@@ -728,7 +728,6 @@
       timerMinutes: 30,
       alarmTime:   '07:00',
       forceUpdatePending: false,
-      _clockInterval: null,
 
       // ── Init ─────────────────────────────────────────────────────
       async init() {
@@ -739,7 +738,7 @@
           this.loadHolidays(),
           this.loadTimerAlarm(),
         ]);
-        this._clockInterval = setInterval(() => this.loadClockStatus(), this.settings.fetch_interval * 1000);
+        setInterval(() => this.loadClockStatus(), 30000);
         setInterval(() => this.loadTimerAlarm(), 5000);
       },
 
@@ -797,13 +796,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        if (r.ok) {
-          clearInterval(this._clockInterval);
-          this._clockInterval = setInterval(() => this.loadClockStatus(), this.settings.fetch_interval * 1000);
-          this.toast_show('Impostazioni salvate');
-        } else {
-          this.toast_show('Errore', 'error');
-        }
+        r.ok ? this.toast_show('Impostazioni salvate') : this.toast_show('Errore', 'error');
       },
 
       // ── Servo helpers ────────────────────────────────────────────

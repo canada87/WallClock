@@ -45,7 +45,7 @@ class SettingsIn(BaseModel):
     time_delay:      int
     time_delay2:     int
     active:          bool
-    fetch_interval:  int = 30
+    fetch_interval:  int = 1
 
 
 @router.get("/settings")
@@ -61,7 +61,7 @@ def get_settings(db: Session = Depends(get_db)):
         "time_delay":       int(_get(db, "time_delay",       "100")),
         "time_delay2":      int(_get(db, "time_delay2",      "20")),
         "active":           _get(db, "active", "1") == "1",
-        "fetch_interval":   int(_get(db, "fetch_interval",   "30")),
+        "fetch_interval":   int(_get(db, "fetch_interval",   "1")),
     }
 
 
