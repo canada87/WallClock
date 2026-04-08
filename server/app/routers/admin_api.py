@@ -45,6 +45,7 @@ class SettingsIn(BaseModel):
     time_delay:      int
     time_delay2:     int
     active:          bool
+    fetch_interval:  int = 30
 
 
 @router.get("/settings")
@@ -60,6 +61,7 @@ def get_settings(db: Session = Depends(get_db)):
         "time_delay":       int(_get(db, "time_delay",       "100")),
         "time_delay2":      int(_get(db, "time_delay2",      "20")),
         "active":           _get(db, "active", "1") == "1",
+        "fetch_interval":   int(_get(db, "fetch_interval",   "30")),
     }
 
 
@@ -245,24 +247,25 @@ def get_clock_status(db: Session = Depends(get_db)):
     config_version = int(_get(db, "config_version", "1"))
     system_active  = _get(db, "active", "1") == "1"
     force_pending  = _get(db, "force_update", "0") == "1"
+    last_esp_ping  = _get(db, "last_esp_ping", "")
 
     ta = db.query(TimerAlarm).filter(TimerAlarm.id == 1).first()
     if ta and ta.ringing:
         return {"active": True, "hour": 88, "minute": 88,
                 "mode": "alarm_ringing", "config_version": config_version,
-                "force_update_pending": force_pending}
+                "force_update_pending": force_pending, "last_esp_ping": last_esp_ping}
     if ta and ta.mode == "timer" and ta.timer_end:
         secs = (ta.timer_end - datetime.utcnow()).total_seconds()
         if secs > 0:
             h = int(secs // 3600); m = int((secs % 3600) // 60)
             return {"active": True, "hour": min(h, 99), "minute": m,
                     "mode": "timer", "config_version": config_version,
-                    "force_update_pending": force_pending}
+                    "force_update_pending": force_pending, "last_esp_ping": last_esp_ping}
 
     if not system_active:
         return {"active": False, "hour": local.hour, "minute": local.minute,
                 "mode": "clock", "config_version": config_version,
-                "force_update_pending": force_pending}
+                "force_update_pending": force_pending, "last_esp_ping": last_esp_ping}
 
     is_weekend = local.weekday() >= 5
     start = int(_get(db, "weekend_start" if is_weekend else "weekday_start",
@@ -273,11 +276,11 @@ def get_clock_status(db: Session = Depends(get_db)):
     if holiday or not (start <= local.hour < end):
         return {"active": False, "hour": local.hour, "minute": local.minute,
                 "mode": "clock", "config_version": config_version,
-                "force_update_pending": force_pending}
+                "force_update_pending": force_pending, "last_esp_ping": last_esp_ping}
 
     return {"active": True, "hour": local.hour, "minute": local.minute,
             "mode": "clock", "config_version": config_version,
-            "force_update_pending": force_pending}
+            "force_update_pending": force_pending, "last_esp_ping": last_esp_ping}
 
 
 @router.post("/force-update")

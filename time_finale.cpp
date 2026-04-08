@@ -3,11 +3,12 @@
 #include <ArduinoJson.h>
 #include <Arduino.h>
 #include <Adafruit_PWMServoDriver.h>
+#include "secrets.h"
 
 // ── Configuration ────────────────────────────────────────────────────
-const char* ssid     = "Vodafon-C47560720";          // WiFi SSID
-const char* password = "YYAK4NYpPkmtpYY3";          // WiFi password
-const char* SERVER   = "http://192.168.1.185:8077";  // <-- IP del tuo server
+const char* ssid     = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
+const char* SERVER   = SERVER_URL;
 
 const unsigned long POLL_INTERVAL_MS = 30000;  // poll ogni 30 secondi
 
@@ -62,12 +63,13 @@ void setup() {
 
   // Init PCA9685 boards
   Serial.println("[BOOT] Initializing PCA9685 boards (0x40, 0x41)...");
+  delay(500);  // wait for PCA9685 to power up
   pwmH.begin();
-  pwmH.setPWMFreq(50);
   pwmH.setOscillatorFrequency(27000000);
+  pwmH.setPWMFreq(50);
   pwmM.begin();
-  pwmM.setPWMFreq(50);
   pwmM.setOscillatorFrequency(27000000);
+  pwmM.setPWMFreq(50);
   Serial.println("[BOOT] ✓ PCA9685 init done");
 
   // All segments off

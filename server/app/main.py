@@ -30,6 +30,7 @@ def _seed():
             "time_delay":      "100",
             "time_delay2":     "20",
             "active":          "1",
+            "fetch_interval":  "30",
         }
         for k, v in defaults.items():
             if not db.query(Setting).filter(Setting.key == k).first():

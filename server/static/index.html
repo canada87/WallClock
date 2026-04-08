@@ -129,6 +129,21 @@
               </svg>
             </button>
           </div>
+
+          <!-- Ultimo ping ESP32 -->
+          <div class="flex items-center gap-2 text-xs"
+               :class="espPingAge() === null ? 'text-slate-600' :
+                       espPingAge() < 90    ? 'text-emerald-400' :
+                       espPingAge() < 300   ? 'text-yellow-400'  : 'text-red-400'">
+            <div class="w-1.5 h-1.5 rounded-full"
+                 :class="espPingAge() === null ? 'bg-slate-600' :
+                         espPingAge() < 90    ? 'bg-emerald-400' :
+                         espPingAge() < 300   ? 'bg-yellow-400'  : 'bg-red-400'"></div>
+            <span x-text="espPingAge() === null
+              ? 'ESP32 — nessun ping ricevuto'
+              : 'Ultimo ping ESP32: ' + fmtPing(clockStatus.last_esp_ping)">
+            </span>
+          </div>
         </div>
 
         <!-- Quick stats -->
@@ -633,6 +648,24 @@
           </div>
         </div>
 
+        <!-- Poll interval -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <h2 class="font-semibold text-sm">Frequenza Aggiornamento</h2>
+          <div>
+            <label class="text-xs text-slate-500 block mb-2 uppercase tracking-wide">Intervallo poll ESP32</label>
+            <select x-model.number="settings.fetch_interval"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              <option :value="10">10 secondi</option>
+              <option :value="30">30 secondi</option>
+              <option :value="60">1 minuto</option>
+              <option :value="300">5 minuti</option>
+              <option :value="600">10 minuti</option>
+              <option :value="1800">30 minuti</option>
+            </select>
+            <p class="text-xs text-slate-600 mt-2">Ogni quanto l'ESP32 chiede l'ora al server e aggiorna i servo.</p>
+          </div>
+        </div>
+
         <button @click="saveSettings()"
                 class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors">
           Salva Impostazioni
@@ -680,7 +713,7 @@
         weekday_start: 8,  weekday_end: 21,
         weekend_start: 11, weekend_end: 23,
         mid_offset: 150,   time_delay: 100, time_delay2: 20,
-        active: true,
+        active: true,      fetch_interval: 30,
       },
       servoConfig: {
         h_on:  Array(14).fill(150), h_off: Array(14).fill(150),
@@ -695,6 +728,7 @@
       timerMinutes: 30,
       alarmTime:   '07:00',
       forceUpdatePending: false,
+      _clockInterval: null,
 
       // ── Init ─────────────────────────────────────────────────────
       async init() {
@@ -705,7 +739,7 @@
           this.loadHolidays(),
           this.loadTimerAlarm(),
         ]);
-        setInterval(() => this.loadClockStatus(), 30000);
+        this._clockInterval = setInterval(() => this.loadClockStatus(), this.settings.fetch_interval * 1000);
         setInterval(() => this.loadTimerAlarm(), 5000);
       },
 
@@ -763,7 +797,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        r.ok ? this.toast_show('Impostazioni salvate') : this.toast_show('Errore', 'error');
+        if (r.ok) {
+          clearInterval(this._clockInterval);
+          this._clockInterval = setInterval(() => this.loadClockStatus(), this.settings.fetch_interval * 1000);
+          this.toast_show('Impostazioni salvate');
+        } else {
+          this.toast_show('Errore', 'error');
+        }
       },
 
       // ── Servo helpers ────────────────────────────────────────────
@@ -873,6 +913,21 @@
         return h > 0
           ? `${h}:${this.pad(m)}:${this.pad(ss)}`
           : `${this.pad(m)}:${this.pad(ss)}`;
+      },
+
+      // ── ESP32 ping helpers ───────────────────────────────────────
+      espPingAge() {
+        const ts = this.clockStatus?.last_esp_ping;
+        if (!ts) return null;
+        return Math.floor((Date.now() - new Date(ts + 'Z').getTime()) / 1000);
+      },
+      fmtPing(ts) {
+        if (!ts) return '—';
+        const d = new Date(ts + 'Z');
+        const age = Math.floor((Date.now() - d.getTime()) / 1000);
+        if (age < 60)  return `${age}s fa`;
+        if (age < 3600) return `${Math.floor(age/60)}min fa`;
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       },
 
       // ── UI helpers ───────────────────────────────────────────────
