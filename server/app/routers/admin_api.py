@@ -283,6 +283,17 @@ def get_clock_status(db: Session = Depends(get_db)):
             "force_update_pending": force_pending, "last_esp_ping": last_esp_ping}
 
 
+@router.get("/active")
+def get_active(db: Session = Depends(get_db)):
+    return {"active": _get(db, "active", "1") == "1"}
+
+
+@router.post("/active")
+def set_active(payload: dict, db: Session = Depends(get_db)):
+    _set(db, "active", "1" if payload.get("active") else "0")
+    return {"ok": True}
+
+
 @router.post("/force-update")
 def force_update(db: Session = Depends(get_db)):
     """Setta un flag: al prossimo poll dell'ESP32 l'ora viene aggiornata
